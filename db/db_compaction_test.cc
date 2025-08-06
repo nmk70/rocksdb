@@ -1491,6 +1491,62 @@ TEST_F(DBCompactionTest, CompactionWithDeletionsAndMinFileSize) {
   }
 }
 
+TEST_F(DBCompactionTest, CompactionRespectsMaxOutputFileSize) {
+  // Set a small max output file size to ensure we trigger file splitting
+  const uint64_t kMaxOutputFileSize = 10 * 1024;  // 10KB
+  const int kValueSize = 1024;  // Total size ~1KB per key-value pair
+  const int kNumKeys = 50;      // ~50KB total data
+  const int kSeed = 301;
+
+  Options options = CurrentOptions();
+  options.write_buffer_size = 1024 * 1024;  // 1MB
+  options.level0_file_num_compaction_trigger = 2;
+
+  // target file size for compaction
+  // target file size for level L, target_file_size_base *
+  // (target_file_size_multiplier ^ (L-1))
+  options.target_file_size_base =
+      kMaxOutputFileSize;  // per file-size for level-1
+  options.target_file_size_multiplier = 1;
+  options.compression = kNoCompression;
+
+  DestroyAndReopen(options);
+
+  // Create enough data to trigger compaction and exceed max_output_file_size
+  // Each key-value pair is approximately 1KB
+
+  // Create first file approx. ~25KB
+  Random rnd(kSeed);
+  for (int i = 0; i < kNumKeys / 2; i++) {
+    ASSERT_OK(Put(Key(i), rnd.RandomString(kValueSize)));
+  }
+  ASSERT_OK(Flush());
+
+  // Create second file to trigger compaction approx. ~25KB
+  for (int i = kNumKeys / 2; i < kNumKeys; i++) {
+    ASSERT_OK(Put(Key(i), rnd.RandomString(kValueSize)));
+  }
+  ASSERT_OK(Flush());
+
+  // Wait for compaction to finish
+  ASSERT_OK(dbfull()->TEST_WaitForCompact());
+
+  // Verify that files were created in level 1. Todo: figure out how many files
+  // were created in lvel 1
+  int num_files_l1 = NumTableFilesAtLevel(1);
+
+  // Get all files and print file details
+  std::vector<LiveFileMetaData> file_metadata;
+  db_->GetLiveFilesMetaData(&file_metadata);
+  for (const auto& file : file_metadata) {
+    std::cout << "File level: " << file.level << " File size: " << file.size
+              << " File number: " << file.file_number << std::endl;
+  }
+
+  // Assert num of files in level 1
+  ASSERT_GT(num_files_l1, 5);  // <-- this assertion fails
+}
+
 TEST_P(DBCompactionTestWithParam, TrivialMoveOneFile) {
   int32_t trivial_move = 0;
   ROCKSDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
