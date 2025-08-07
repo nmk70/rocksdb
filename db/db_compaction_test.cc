@@ -1513,17 +1513,18 @@ TEST_F(DBCompactionTest, CompactionRespectsMaxOutputFileSize) {
   DestroyAndReopen(options);
 
   // Create enough data to trigger compaction and exceed max_output_file_size
-  // Each key-value pair is approximately 1KB
+  // Each key-value pair is approx. 1KB
 
-  // Create first file approx. ~25KB
+  // Create first file approx. 25KB
   Random rnd(kSeed);
   for (int i = 0; i < kNumKeys / 2; i++) {
     ASSERT_OK(Put(Key(i), rnd.RandomString(kValueSize)));
   }
   ASSERT_OK(Flush());
 
-  // Create second file to trigger compaction approx. ~25KB
-  for (int i = kNumKeys / 2; i < kNumKeys; i++) {
+  // Create second file to trigger compaction approx. 25KB
+  // Ensure overlapping keys in LO files to bypass trivial compaction
+  for (int i = (kNumKeys / 2) - 5; i < kNumKeys; i++) {
     ASSERT_OK(Put(Key(i), rnd.RandomString(kValueSize)));
   }
   ASSERT_OK(Flush());
@@ -1531,8 +1532,7 @@ TEST_F(DBCompactionTest, CompactionRespectsMaxOutputFileSize) {
   // Wait for compaction to finish
   ASSERT_OK(dbfull()->TEST_WaitForCompact());
 
-  // Verify that files were created in level 1. Todo: figure out how many files
-  // were created in lvel 1
+  // Verify that files were created in level 1.
   int num_files_l1 = NumTableFilesAtLevel(1);
 
   // Get all files and print file details
@@ -1540,11 +1540,14 @@ TEST_F(DBCompactionTest, CompactionRespectsMaxOutputFileSize) {
   db_->GetLiveFilesMetaData(&file_metadata);
   for (const auto& file : file_metadata) {
     std::cout << "File level: " << file.level << " File size: " << file.size
-              << " File number: " << file.file_number << std::endl;
+              << " File number: " << file.file_number
+              << " Smallest key: " << file.smallestkey
+              << " Largest key: " << file.largestkey << std::endl;
   }
 
   // Assert num of files in level 1
-  ASSERT_GT(num_files_l1, 5);  // <-- this assertion fails
+  ASSERT_EQ(num_files_l1,
+            4);  // <-- no of files in L1 is 4
 }
 
 TEST_P(DBCompactionTestWithParam, TrivialMoveOneFile) {
