@@ -1493,7 +1493,7 @@ TEST_F(DBCompactionTest, CompactionWithDeletionsAndMinFileSize) {
 
 TEST_F(DBCompactionTest, CompactionRespectsMaxOutputFileSize) {
   // Set a small max output file size to ensure we trigger file splitting
-  const uint64_t kMaxOutputFileSize = 10 * 1024;  // 10KB
+  const uint64_t kMaxOutputFileSize = 5 * 1024;  // 5KB
   const int kValueSize = 1024;  // Total size ~1KB per key-value pair
   const int kNumKeys = 50;      // ~50KB total data
   const int kSeed = 301;
