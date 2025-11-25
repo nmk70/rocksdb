@@ -286,6 +286,12 @@ bool CompactionOutputs::ShouldStopBefore(const CompactionIterator& c_iter) {
     return true;
   }
 
+  // Cut file early if it qualifies for DTC to reduce write amplification
+  // in the follow-up deletion triggered compaction.
+  if (builder_->NeedCompact()) {
+    return true;
+  }
+
   // Check if it needs to split for RoundRobin
   // Invalid local_output_split_key indicates that we do not need to split
   if (local_output_split_key_ != nullptr && !is_split_) {
